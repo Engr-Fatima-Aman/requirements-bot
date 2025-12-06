@@ -1,24 +1,31 @@
 version: "3.1"
 
 stories:
-- story: Greeting
-  steps:
-    - intent: greet
-    - action: utter_greet
-    # We set the project_id at the start
-    - action: action_set_project_id
 
-- story: Main conversation loop
-  steps:
-    # This story activates ANY time the user says something
-    # that is classified as 'inform'
-    - intent: inform
-    # It runs our ONE smart action.
-    - action: action_intelligent_analysis
-    # The action itself handles the response
-    # The story then loops, waiting for the next 'inform'
+  - story: Greeting and initialization
+    steps:
+      - intent: greet
+      - action: utter_greet
+      - action: action_set_project_id
 
-- story: Goodbye
-  steps:
-    - intent: goodbye
-    - action: utter_goodbye
+  - story: Multi-turn vision gathering
+    steps:
+      - intent: inform
+      - action: action_intelligent_analysis
+      - intent: inform
+      - action: action_intelligent_analysis
+      - intent: inform
+      - action: action_intelligent_analysis
+
+  - story: Functional requirements gathering
+    steps:
+      - intent: inform
+      - action: action_intelligent_analysis
+      - intent: inform
+      - action: action_intelligent_analysis
+
+  - story: Request SRS Export
+    steps:
+      - intent: request_srs_export
+      - action: action_generate_srs_doc
+      - action: action_listen

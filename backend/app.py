@@ -1,4 +1,4 @@
-# backend/app.py (V3 - With flexible SRS logic and 120s Timeout)
+# backend/app.py (V4 - FIXED)
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -24,17 +24,19 @@ def get_db_connection():
     return conn
 
 def send_message_to_rasa(message, sender_id="user_1"):
+    """Send message to Rasa and get response. Rasa will call Ollama via actions."""
     try:
         payload = {"sender": sender_id, "message": message}
         response = requests.post(
             f"{RASA_SERVER_URL}/webhooks/rest/webhook",
             json=payload,
-            timeout=120  # <--- FIX #1: INCREASED TIMEOUT TO 2 MINUTES
+            timeout=120
         )
+        response.raise_for_status()
         return response.json()
     except requests.exceptions.Timeout:
         print("Error: RASA request timed out.")
-        return [] # Return an empty list on timeout
+        return []
     except Exception as e:
         print(f"Error communicating with RASA: {e}")
         return {"error": str(e)}
@@ -66,7 +68,7 @@ def create_project():
         data = request.get_json()
         project_name = data.get('project_name', 'Unnamed Project')
         description = data.get('description', '')
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
@@ -76,7 +78,7 @@ def create_project():
         conn.commit()
         project_id = cursor.lastrowid
         conn.close()
-        
+
         return jsonify({
             "success": True,
             "project_id": project_id,
@@ -103,6 +105,10 @@ def get_project(project_id):
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
+    """
+    FIX #1: Send message to Rasa which routes through action_intelligent_analysis.
+    This action calls Ollama and saves analysis to DB.
+    """
     try:
         data = request.get_json()
         message = data.get('message', '')
@@ -112,6 +118,7 @@ def chat():
         if not message:
             return jsonify({"error": "Message cannot be empty"}), 400
         
+        # Send to Rasa - it will invoke action_intelligent_analysis -> Ollama
         rasa_response = send_message_to_rasa(message, sender_id)
         
         bot_messages = []
@@ -122,6 +129,7 @@ def chat():
         
         bot_response = " ".join(bot_messages) if bot_messages else "I didn't understand that. Could you rephrase?"
         
+        # Save conversation
         save_conversation(project_id, message, bot_response, "user_message")
         
         return jsonify({
@@ -133,32 +141,28 @@ def chat():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# ============================================
-# === THIS IS THE FIXED SUMMARY FUNCTION (FIX #2) ===
-# ============================================
 @app.route('/api/projects/<int:project_id>/summary', methods=['GET'])
 def get_project_summary(project_id):
+    """
+    FIX #2: Correctly count captured requirements and detected issues.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Get all requirements
         cursor.execute('SELECT * FROM requirements WHERE project_id = ?', (project_id,))
         requirements = [dict(row) for row in cursor.fetchall()]
 
-        # === FLEXIBLE LOGIC FIX ===
-        functional = 0
-        nonfunctional = 0
-        for req in requirements:
-            req_type = req.get('req_type', '').lower()
-            if 'func' in req_type:
-                functional += 1
-            if 'non-func' in req_type or 'nonfunc' in req_type:
-                nonfunctional += 1
+        # Count by type
+        functional = sum(1 for req in requirements if 'func' in req.get('req_type', '').lower() and 'non' not in req.get('req_type', '').lower())
+        non_functional = sum(1 for req in requirements if 'non-func' in req.get('req_type', '').lower() or 'nonfunc' in req.get('req_type', '').lower())
         
-        cursor.execute('SELECT COUNT(*) as count FROM ambiguities WHERE project_id = ?', (project_id,))
+        # Get ambiguities and contradictions (detected but not resolved)
+        cursor.execute('SELECT COUNT(*) as count FROM ambiguities WHERE project_id = ? AND status = ?', (project_id, 'detected'))
         ambiguities = cursor.fetchone()['count']
         
-        cursor.execute('SELECT COUNT(*) as count FROM contradictions WHERE project_id = ?', (project_id,))
+        cursor.execute('SELECT COUNT(*) as count FROM contradictions WHERE project_id = ? AND status = ?', (project_id, 'flagged'))
         contradictions = cursor.fetchone()['count']
         
         conn.close()
@@ -167,9 +171,9 @@ def get_project_summary(project_id):
             "success": True,
             "project_id": project_id,
             "summary": {
-                "total_requirements": len(requirements), # Total is just the count
+                "total_requirements": len(requirements),
                 "functional_requirements": functional,
-                "non_functional_requirements": nonfunctional,
+                "non_functional_requirements": non_functional,
                 "total_ambiguities": ambiguities,
                 "ambiguities_resolved": 0,
                 "total_contradictions": contradictions,
@@ -179,11 +183,9 @@ def get_project_summary(project_id):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# ============================================
-# === THIS IS THE FIXED EXPORT FUNCTION (FIX #2) ===
-# ============================================
 @app.route('/api/projects/<int:project_id>/export', methods=['GET'])
 def export_requirements(project_id):
+    """Export SRS document with all captured data."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -231,43 +233,47 @@ Document Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             doc += f"Timestamp: {conv.get('timestamp', '')}\n"
             doc += "-" * 40 + "\n"
             
-        # === FLEXIBLE LOGIC FIX ===
-        functional_reqs = [r for r in requirements if 'func' in r.get('req_type', '').lower()]
+        # Categorize requirements
+        functional_reqs = [r for r in requirements if 'func' in r.get('req_type', '').lower() and 'non' not in r.get('req_type', '').lower()]
         nonfunctional_reqs = [r for r in requirements if 'non-func' in r.get('req_type', '').lower() or 'nonfunc' in r.get('req_type', '').lower()]
         constraint_reqs = [r for r in requirements if 'constraint' in r.get('req_type', '').lower()]
 
         doc += f"\n{'='*80}\n2. FUNCTIONAL REQUIREMENTS\n{'='*80}\n\n"
         if functional_reqs:
             for i, req in enumerate(functional_reqs, 1):
-                doc += f"FR-{i}: {req.get('content', '')} (Type: {req.get('req_type')})\n\n"
+                doc += f"FR-{i}: {req.get('content', '')}\n"
+                doc += f"     Priority: {req.get('priority', 'medium')}\n\n"
         else:
             doc += "No functional requirements captured yet.\n"
             
         doc += f"\n{'='*80}\n3. NON-FUNCTIONAL REQUIREMENTS\n{'='*80}\n\n"
         if nonfunctional_reqs:
             for i, req in enumerate(nonfunctional_reqs, 1):
-                doc += f"NFR-{i}: {req.get('content', '')} (Type: {req.get('req_type')})\n\n"
+                doc += f"NFR-{i}: {req.get('content', '')}\n"
+                doc += f"     Priority: {req.get('priority', 'medium')}\n\n"
         else:
             doc += "No non-functional requirements captured yet.\n"
             
         doc += f"\n{'='*80}\n4. CONSTRAINTS & LIMITATIONS\n{'='*80}\n\n"
         if constraint_reqs:
             for i, req in enumerate(constraint_reqs, 1):
-                doc += f"C-{i}: {req.get('content', '')} (Type: {req.get('req_type')})\n\n"
+                doc += f"C-{i}: {req.get('content', '')}\n\n"
         else:
             doc += "No constraints captured yet.\n"
         
         doc += f"\n{'='*80}\n5. AMBIGUITIES DETECTED\n{'='*80}\n\n"
         if ambiguities:
             for i, amb in enumerate(ambiguities, 1):
-                doc += f"AMB-{i}: {amb.get('content', '')}\n\n"
+                doc += f"AMB-{i}: {amb.get('content', '')}\n"
+                doc += f"     Status: {amb.get('status', 'detected')}\n\n"
         else:
             doc += "No ambiguities detected.\n"
             
         doc += f"\n{'='*80}\n6. CONTRADICTIONS DETECTED\n{'='*80}\n\n"
         if contradictions:
             for i, contra in enumerate(contradictions, 1):
-                doc += f"CTR-{i}: {contra.get('message', '')}\n\n"
+                doc += f"CTR-{i}: {contra.get('message', '')}\n"
+                doc += f"     Status: {contra.get('status', 'flagged')}\n\n"
         else:
             doc += "No contradictions detected.\n"
             
@@ -301,7 +307,6 @@ def internal_error(error):
 if __name__ == '__main__':
     if not os.path.exists(DB_PATH):
         print("Database not found. Creating...")
-        # This assumes database/setup.py is runnable from here
         os.system(f'python {os.path.join(os.path.dirname(__file__), "../database/setup.py")}')
     
     print("Starting Flask backend server...")

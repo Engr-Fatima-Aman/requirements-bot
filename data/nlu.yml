@@ -1,4 +1,5 @@
 version: "3.1"
+
 nlu:
 - intent: greet
   examples: |
@@ -6,46 +7,67 @@ nlu:
     - hello
     - hi
     - good morning
+    - good evening
+    - moin
+    - greet me
 
 - intent: goodbye
   examples: |
     - bye
     - goodbye
-    - see you
+    - see you around
+    - see you later
+    - exit
+    - quit
+    - done chatting
+    - that's all for today
 
-# === NEW INTENT ===
+- intent: inform
+  examples: |
+    - we need a web application
+    - I want a mobile app
+    - the project is about e-commerce
+    - users should be able to login
+    - we need a search feature
+    - performance should support 1000 users
+    - budget is $50,000
+    - deadline is March 2025
+    - we need encryption for security
+    - integration with payment gateway
+    - cloud hosting on AWS
+    - responsive design for mobile
+    - dark mode support
+    - multi-language support
+    - API-based architecture
+    - real-time notifications
+    - database should be MySQL
+    - three-month timeline
+    - five developers available
+    - high availability required
+    - no specific budget constraints
+    - GDPR compliance needed
+    - OAuth2 for authentication
+    - SSL/TLS encryption
+    - zero downtime deployment
+    - continuous integration setup
+    - unit test coverage above 80%
+    - users upload documents
+    - automated email notifications
+    - admin dashboard
+    - user role management
+    - audit logging required
+    - data backup daily
+    - disaster recovery plan
+    - 99.9% uptime SLA
+
 - intent: confirm
   examples: |
     - yes
-    - yeah
-    - correct
+    - indeed
+    - of course
     - that's right
-    - exactly
-    - sure
-    - ok
-    - yup
-    
-# This is the new, combined intent.
-# It catches EVERYTHING that isn't a greeting.
-- intent: inform
-  examples: |
-    - we need a mobile app
-    - we want to build a CRM
-    - we need user authentication
-    - we want a dashboard
-    - limited budget
-    - we need it in 3 months
-    - sales team will use it
-    - company is in healthcare
-    - this is essential
-    - we use Python
-    - integrate with Salesforce
-    - i need a page for users to sign in
-    - what about security?
-    - the system must be fast
-- intent: request_srs_export
-  examples: |
-    - generate the document
-    - I want the SRS now
-    - export my requirements
-    - finalize the project
+    - true
+    - correct
+    - absolutely
+    - I agree
+    - sounds good

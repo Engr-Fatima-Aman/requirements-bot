@@ -1,30 +1,54 @@
+# config.yml (OPTIMIZED - V2)
 recipe: default.v1
 
 language: en
 
 pipeline:
-- name: WhitespaceTokenizer
-- name: RegexFeaturizer
-- name: LexicalSyntacticFeaturizer
-- name: CountVectorsFeaturizer
-- name: CountVectorsFeaturizer
-  analyzer: char_wb
-  min_ngram: 1
-  max_ngram: 4
-- name: DIETClassifier
-  epochs: 100
-  constrain_similarities: true
-- name: EntitySynonymMapper
-- name: ResponseSelector
-  epochs: 100
-  constrain_similarities: true
+  # Tokenization
+  - name: WhitespaceTokenizer
+  
+  # Feature extraction
+  - name: RegexFeaturizer
+  - name: LexicalSyntacticFeaturizer
+  - name: CountVectorsFeaturizer
+  
+  # Character-level features for better matching
+  - name: CountVectorsFeaturizer
+    analyzer: char_wb
+    min_ngram: 1
+    max_ngram: 4
+  
+  # Intent classification & entity recognition
+  - name: DIETClassifier
+    epochs: 100
+    constrain_similarities: true
+    # Help model distinguish between inform intent variations
+    entity_recognition: true
+  
+  # Synonym mapping
+  - name: EntitySynonymMapper
+  
+  # Response selection (for NLU fallback)
+  - name: ResponseSelector
+    epochs: 100
+    constrain_similarities: true
 
 policies:
-- name: MemoizationPolicy
-  max_history: 2
-- name: RulePolicy
-- name: TEDPolicy
-  max_history: 5
-  epochs: 100
-  constrain_similarities: true
-assistant_id: 20251107-185002-unproductive-cube
+  # Remembers exact action sequences from stories
+  - name: MemoizationPolicy
+    max_history: 2
+  
+  # Follows explicit rules for deterministic behavior
+  - name: RulePolicy
+    core_fallback_threshold: 0.3
+    core_fallback_action_name: "action_default_fallback"
+  
+  # ML-based policy for dynamic responses
+  - name: TEDPolicy
+    max_history: 5
+    epochs: 100
+    constrain_similarities: true
+    # Ensemble with other policies
+    priority: 1
+
+assistant_id: 20251206-requirements-bot-v2

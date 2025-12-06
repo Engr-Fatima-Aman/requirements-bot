@@ -1,5 +1,5 @@
-# --- V10: Phased Elicitation Fix ---
-print("\n[ACTIONS.PY] --- Loading actions.py (V10) ---")
+# actions/actions.py (V11 - ENHANCED OLLAMA INTEGRATION)
+print("\n[ACTIONS.PY] --- Loading actions.py (V11 - Enhanced Ollama) ---")
 
 from typing import Any, Text, Dict, List
 from rasa_sdk import Action, Tracker
@@ -11,10 +11,7 @@ import requests
 from datetime import datetime
 import re
 
-from docx import Document
-from docx.shared import Pt
-
-print("[ACTIONS.PY] All V10 imports successful.")
+print("[ACTIONS.PY] All imports successful.")
 
 # ============================================
 # OLLAMA & DB CONFIG
@@ -25,53 +22,111 @@ OLLAMA_TIMEOUT = 120
 DB_PATH = "requirements.db"
 
 # ============================================
-# PROMPT DICTIONARY
-# This is the new "brain" for your bot
+# SYSTEM PROMPTS WITH EXAMPLES
 # ============================================
 SYSTEM_PROMPTS = {
     "vision": """
-You are a friendly Business Analyst. Your goal is to understand the user's high-level project vision.
-Ask simple, open-ended questions about the project, what it is, and who it is for.
+You are a Business Analyst helping capture project requirements. You are in the VISION phase.
+
+Your GOAL: Understand the user's high-level project vision and goals.
+Ask about:
+- What is the project about?
+- Who will use it?
+- What problem does it solve?
+
 DO NOT ask about specific features, performance, or budget yet.
-When you feel you understand the vision, in your analysis JSON set "next_phase" to "functional".
 
-You MUST respond with a SINGLE, valid JSON object with "reply" and "analysis" keys.
-The "analysis" object MUST have "type", "priority", "requirement", and "next_phase" keys.
-""",
-    "functional": """
-You are a Business Analyst. You have the project vision. Now, your goal is to elicit FUNCTIONAL requirements (features).
-Ask simple, one-at-a-time questions like "What about user logins?", "Do you need a search bar?", "Will you sell products online?".
-Refer to the attached SRS.doc for feature examples (e.g., shopping cart, product reviews).
-Keep asking for features until the user says they are done.
-When the user has no more features, set "next_phase" to "non_functional".
-
-You MUST respond with a SINGLE, valid JSON object with "reply" and "analysis" keys.
-The "analysis" object MUST have "type", "priority", "requirement", and "next_phase" keys.
-""",
-    "non_functional": """
-You are a Business Analyst. You have the features. Now, elicit NON-FUNCTIONAL requirements.
-Ask simple, one-at-a-time questions about:
-1.  **Performance:** "How many users should it support?" (like the user said 200,000)
-2.  **Usability:** "Should the design be simple? Any accessibility needs?"
-3.  **Security:** "How important is security? (e.g., for payments)"
-When you have enough NFRs, set "next_phase" to "constraints".
-
-You MUST respond with a SINGLE, valid JSON object with "reply" and "analysis" keys.
-The "analysis" object MUST have "type", "priority", "requirement", and "next_phase" keys.
-""",
-    "constraints": """
-You are a Business Analyst. You have the features and NFRs. Now, you MUST ask about CONSTRAINTS.
-Ask simple, direct questions one at a time about:
-1.  **Timeline:** "What is your deadline for this project?"
-2.  **Budget:** "Is there a specific budget we should work within?"
-3.  **Technology:** "Are there any preferred technologies (e.g., Python, AWS)?"
-When you are done, set "next_phase" to "done".
-
-You MUST respond with a SINGLE, valid JSON object with "reply" and "analysis" keys.
-The "analysis" object MUST have "type", "priority", "requirement", and "next_phase" keys.
-"""
+IMPORTANT: Respond with VALID JSON only, no other text.
+{
+  "reply": "Your conversational response here",
+  "analysis": {
+    "type": "General|Requirement|Ambiguity|Contradiction",
+    "priority": "high|medium|low",
+    "requirement": "Extracted requirement or observation",
+    "next_phase": "vision|functional|non_functional|constraints|done"
+  }
 }
 
+When you have understood the vision, set "next_phase" to "functional".
+""",
+    
+    "functional": """
+You are a Business Analyst. You are in the FUNCTIONAL REQUIREMENTS phase.
+
+Your GOAL: Elicit FEATURES and FUNCTIONAL requirements one at a time.
+Ask about:
+- What key features should it have?
+- Who are the main users?
+- What main tasks should users perform?
+- Any specific workflows or processes?
+
+When asking about a new feature, extract it as a requirement.
+When user says they're done with features, set "next_phase" to "non_functional".
+
+IMPORTANT: Respond with VALID JSON only, no other text.
+{
+  "reply": "Your conversational response here",
+  "analysis": {
+    "type": "General|Requirement|Ambiguity|Contradiction",
+    "priority": "high|medium|low",
+    "requirement": "Extracted feature or requirement",
+    "next_phase": "vision|functional|non_functional|constraints|done"
+  }
+}
+
+Example ambiguity: "You mentioned users but didn't specify HOW MANY. This is ambiguous."
+""",
+    
+    "non_functional": """
+You are a Business Analyst. You are in the NON-FUNCTIONAL REQUIREMENTS phase.
+
+Your GOAL: Elicit NON-FUNCTIONAL requirements about performance, usability, security, etc.
+Ask about:
+1. Performance: "How many users should it support simultaneously?"
+2. Usability: "Should it be mobile-friendly? Any accessibility needs?"
+3. Security: "How sensitive is the data? Do you need encryption?"
+4. Reliability: "What uptime percentage do you need?"
+
+Extract each as a non-functional requirement.
+When done, set "next_phase" to "constraints".
+
+IMPORTANT: Respond with VALID JSON only, no other text.
+{
+  "reply": "Your conversational response here",
+  "analysis": {
+    "type": "General|Requirement|Ambiguity|Contradiction",
+    "priority": "high|medium|low",
+    "requirement": "Non-functional requirement extracted",
+    "next_phase": "vision|functional|non_functional|constraints|done"
+  }
+}
+""",
+    
+    "constraints": """
+You are a Business Analyst. You are in the CONSTRAINTS phase.
+
+Your GOAL: Elicit PROJECT CONSTRAINTS.
+Ask about:
+1. Timeline: "What's your deadline?"
+2. Budget: "Is there a budget constraint?"
+3. Technology: "Any preferred/restricted technologies?"
+4. Resources: "How many people will work on this?"
+
+Extract constraints as requirements with type "Constraint".
+When done, set "next_phase" to "done".
+
+IMPORTANT: Respond with VALID JSON only, no other text.
+{
+  "reply": "Your conversational response here",
+  "analysis": {
+    "type": "General|Requirement|Ambiguity|Contradiction|Constraint",
+    "priority": "high|medium|low",
+    "requirement": "Constraint extracted",
+    "next_phase": "vision|functional|non_functional|constraints|done"
+  }
+}
+""",
+}
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -79,25 +134,31 @@ def get_db_connection():
     return conn
 
 def get_conversation_history(tracker: Tracker) -> List[Dict[str, str]]:
+    """Extract recent conversation history from Rasa tracker."""
     print("[HISTORY] Building conversation history...")
     history = []
+    
+    # Get events in reverse to collect recent messages
     for event in reversed(tracker.events):
         if event['event'] == 'user':
-            history.append({"role": "user", "content": event['text']})
+            history.insert(0, {"role": "user", "content": event['text']})
         elif event['event'] == 'bot':
             if event.get('text'):
-                history.append({"role": "assistant", "content": event['text']})
-        if len(history) >= 10:
+                history.insert(0, {"role": "assistant", "content": event['text']})
+        
+        # Keep last 10 exchanges to avoid token limits
+        if len(history) >= 20:
             break
+    
     print(f"[HISTORY] Found {len(history)} messages.")
-    return list(reversed(history))
-
-# ============================================
-# THE "MASTER" ACTION (V10)
-# ============================================
+    return history
 
 class ActionIntelligentAnalysis(Action):
-
+    """
+    FIX #3: This is the MAIN action that calls Ollama and saves analysis to DB.
+    It's triggered for every user message and handles phase progression.
+    """
+    
     def name(self) -> Text:
         return "action_intelligent_analysis"
 
@@ -105,41 +166,46 @@ class ActionIntelligentAnalysis(Action):
             tracker: Tracker,
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         
-        print("\n--- [ACTION] 'action_intelligent_analysis' CALLED ---")
+        print("\n" + "="*60)
+        print("[ACTION] 'action_intelligent_analysis' CALLED")
+        print("="*60)
 
         # 1. Get current state
         user_message = tracker.latest_message.get("text", "")
         current_phase = tracker.get_slot("elicitation_phase") or "vision"
-        
-        # Handle the 'done' phase
-        if current_phase == "done":
-            print("[ACTION] Elicitation is done.")
-            return [BotUttered(text="I believe I have all the core requirements. Thank you! You can now export the SRS.", metadata={"from_action": "action_intelligent_analysis"})]
-
         project_id = tracker.get_slot("project_id") or 1
-        print(f"[ACTION] Project ID: {project_id}, Phase: {current_phase}, User Message: {user_message}")
+        
+        print(f"[STATE] Project: {project_id}, Phase: {current_phase}")
+        print(f"[USER] Message: {user_message[:100]}...")
+        
+        # Handle 'done' phase
+        if current_phase == "done":
+            print("[ACTION] Elicitation complete.")
+            return [BotUttered(
+                text="✅ I believe I have captured all essential requirements. You can now export your SRS document. Great work!",
+                metadata={"from_action": "action_intelligent_analysis"}
+            )]
+
+        # 2. Build conversation history
         conversation_history = get_conversation_history(tracker)
         conversation_history.append({"role": "user", "content": user_message})
 
-        # 2. Get the correct prompt for the current phase
+        # 3. Get system prompt for current phase
         system_prompt = SYSTEM_PROMPTS.get(current_phase, SYSTEM_PROMPTS["vision"])
 
-        # 3. Format payload
-        messages_payload = [
-            {"role": "system", "content": system_prompt}
-        ]
+        # 4. Build Ollama payload
+        messages_payload = [{"role": "system", "content": system_prompt}]
         messages_payload.extend(conversation_history)
         
         payload = {
             "model": OLLAMA_MODEL,
             "messages": messages_payload,
-            "stream": False,
-            "format": "json"
+            "stream": False
         }
 
-        # 4. Call Ollama
+        # 5. Call Ollama
         try:
-            print(f"[ACTION] Calling Ollama for phase '{current_phase}'...")
+            print(f"[OLLAMA] Calling {OLLAMA_MODEL} for phase '{current_phase}'...")
             response = requests.post(
                 OLLAMA_API_URL,
                 data=json.dumps(payload),
@@ -147,80 +213,115 @@ class ActionIntelligentAnalysis(Action):
                 timeout=OLLAMA_TIMEOUT
             )
             response.raise_for_status()
-            print("[ACTION] Ollama request successful.")
+            print("[OLLAMA] Request successful.")
 
+            # 6. Parse Ollama response
             response_data = response.json()
-            response_json = json.loads(response_data['message']['content'])
-            print("[ACTION] Successfully decoded JSON from Ollama.")
+            response_text = response_data.get('message', {}).get('content', '')
             
-            bot_response_text_raw = response_json.get("reply")
-            bot_response_text = str(bot_response_text_raw) if bot_response_text_raw is not None else "I'm not sure what to say. Could you rephrase?"
-
-            analysis_data_raw = response_json.get("analysis")
-            analysis_data = analysis_data_raw if isinstance(analysis_data_raw, dict) else {}
+            # Try to extract JSON
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    response_json = json.loads(json_match.group())
+                    print("[PARSE] JSON extracted successfully.")
+                except json.JSONDecodeError:
+                    print("[PARSE] JSON parsing failed, using plain text.")
+                    response_json = {"reply": response_text, "analysis": {"type": "General"}}
+            else:
+                print("[PARSE] No JSON found, using plain text.")
+                response_json = {"reply": response_text, "analysis": {"type": "General"}}
             
-            print(f"[ACTION] Ollama reply: {bot_response_text[:50]}...")
+            # 7. Extract analysis and reply
+            bot_response_text = response_json.get("reply", response_text)
+            analysis_data = response_json.get("analysis", {})
+            
+            print(f"[RESPONSE] {bot_response_text[:80]}...")
+            
+            # 8. Save analysis to database
             self.save_analysis_to_db(analysis_data, project_id, user_message)
 
-            # 5. Check for phase change
+            # 9. Check for phase transition
             next_phase = analysis_data.get("next_phase", current_phase)
             if next_phase != current_phase and next_phase in ["functional", "non_functional", "constraints", "done"]:
-                print(f"[ACTION] === CHANGING PHASE TO: {next_phase} ===")
-                return [SlotSet("elicitation_phase", next_phase), BotUttered(text=bot_response_text, metadata={"from_action": "action_intelligent_analysis"})]
+                print(f"[PHASE CHANGE] {current_phase} → {next_phase}")
+                return [
+                    SlotSet("elicitation_phase", next_phase),
+                    BotUttered(text=bot_response_text, metadata={"from_action": "action_intelligent_analysis"})
+                ]
+            
+            # No phase change
+            return [BotUttered(text=bot_response_text, metadata={"from_action": "action_intelligent_analysis"})]
 
         except requests.exceptions.Timeout:
-            print(f"[OLLAMA ERROR] Request timed out after {OLLAMA_TIMEOUT}s.")
-            bot_response_text = "I'm taking a bit longer to think than usual. Could you please repeat that?"
+            print(f"[ERROR] Ollama timeout after {OLLAMA_TIMEOUT}s")
+            bot_response_text = "I'm thinking... please give me a moment. Could you repeat that?"
         except Exception as e:
-            print(f"[ACTION ERROR] An unexpected error occurred: {e}")
-            bot_response_text = "I seem to have run into an unknown error. Please try again."
+            print(f"[ERROR] Unexpected error: {e}")
+            bot_response_text = "I encountered an error. Could you please rephrase that?"
         
-        print(f"[ACTION] Returning message to Rasa Core.")
         return [BotUttered(text=bot_response_text, metadata={"from_action": "action_intelligent_analysis"})]
 
     def save_analysis_to_db(self, analysis_data: Dict[str, Any], project_id: int, user_message: str):
+        """
+        FIX #4: Save Ollama's analysis to the database.
+        """
         try:
-            # Use the analysis data to save
             req_type = analysis_data.get("type", "General")
             priority = analysis_data.get("priority", "medium")
-            content = analysis_data.get("requirement", user_message) # Default to user message
+            content = analysis_data.get("requirement", user_message)
 
+            # Skip generic responses
             if req_type == "General":
-                print("[DB SAVE] 'General' message, not saving.")
+                print("[DB] Skipping 'General' type - not saving.")
                 return 
 
-            table_name = "requirements"
+            # Determine which table to save to
             if req_type == "Ambiguity":
                 table_name = "ambiguities"
+                print("[DB] Saving AMBIGUITY...")
             elif req_type == "Contradiction":
                 table_name = "contradictions"
+                print("[DB] Saving CONTRADICTION...")
+            elif req_type == "Constraint":
+                table_name = "requirements"
+                print("[DB] Saving CONSTRAINT requirement...")
+            else:  # Requirement
+                table_name = "requirements"
+                print("[DB] Saving REQUIREMENT...")
 
             conn = get_db_connection()
             cursor = conn.cursor()
             
             if table_name == "requirements":
-                cursor.execute(
-                    "INSERT INTO requirements (project_id, content, req_type, priority, status, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                    (project_id, content, req_type, priority, 'captured', datetime.now().isoformat())
-                )
-            else: 
-                db_content = f"Original Message: '{user_message}' | Analysis: '{content}'"
-                cursor.execute(
-                    f"INSERT INTO {table_name} (project_id, content, status, timestamp) VALUES (?, ?, ?, ?)",
-                    (project_id, db_content, 'detected', datetime.now().isoformat())
-                )
+                cursor.execute('''
+                    INSERT INTO requirements (project_id, content, req_type, priority, status, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (project_id, content, req_type, priority, 'captured', datetime.now().isoformat()))
+                
+            elif table_name == "ambiguities":
+                cursor.execute('''
+                    INSERT INTO ambiguities (project_id, content, status, timestamp)
+                    VALUES (?, ?, ?, ?)
+                ''', (project_id, content, 'detected', datetime.now().isoformat()))
+                
+            elif table_name == "contradictions":
+                cursor.execute('''
+                    INSERT INTO contradictions (project_id, message, status, timestamp)
+                    VALUES (?, ?, ?, ?)
+                ''', (project_id, content, 'flagged', datetime.now().isoformat()))
             
             conn.commit()
             conn.close()
-            print(f"[DB SAVE] Saved '{req_type}' to {table_name}.")
+            print(f"[DB] ✓ Saved to {table_name}: {content[:60]}...")
 
         except Exception as e:
-            print(f"[DB SAVE ERROR] {e}")
+            print(f"[DB ERROR] {e}")
 
-# ============================================
-# PROJECT ID ACTION
-# ============================================
+
 class ActionSetProjectId(Action):
+    """Initialize project and elicitation phase at the start."""
+    
     def name(self) -> Text:
         return "action_set_project_id"
     
@@ -228,52 +329,24 @@ class ActionSetProjectId(Action):
             tracker: Tracker,
             domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
         
-        print("\n--- [ACTION] 'action_set_project_id' CALLED ---")
-        print("[ACTION] Set project_id to 1.0")
-        # Start the elicitation in the 'vision' phase
-        return [SlotSet("project_id", 1.0), SlotSet("elicitation_phase", "vision")]
+        print("\n[ACTION] Setting initial state...")
+        print("[ACTION] Project ID: 1, Elicitation Phase: vision")
+        
+        # Start in 'vision' phase
+        return [
+            SlotSet("project_id", 1.0),
+            SlotSet("elicitation_phase", "vision")
+        ]
 
-# --- V10: FILE HAS FINISHED LOADING ---
-print("[ACTIONS.PY] --- Finished loading actions.py (V10) ---")
-# ... (ActionSetProjectId class is here) ...
 
-# ============================================
-# SRS DOCUMENT GENERATION ACTION
-# ============================================
 class ActionGenerateSRS(Action):
+    """Generate SRS document (triggered via export endpoint)."""
+    
     def name(self) -> Text:
-        return "action_generate_srs_doc"
-
+        return "nodoc: "
+    
     def run(self, dispatcher: CollectingDispatcher, tracker: Tracker, domain: Dict[Text, Any]) -> List[Dict[Text, Any]]:
-        
-        # 1. Gather all necessary data from RASA Slots (e.g., project name, features)
-        project_name = tracker.get_slot("project_name") or "Unnamed Project"
-        features = tracker.get_slot("features") or []
-        
-        # 2. Create the Word Document
-        doc = Document()
-        
-        # --- TITLE PAGE / REVISION HISTORY ---
-        doc.add_heading('Software Requirements Specification', 0)
-        doc.add_heading('1. Introduction', level=1)
-        doc.add_paragraph("This SRS was generated by the Requirements Gathering Bot.")
-
-        # --- SECTION 2: FUNCTIONAL REQUIREMENTS ---
-        doc.add_heading('2. Functional Requirements', level=1)
-        if features:
-            for i, feature in enumerate(features, 1):
-                doc.add_paragraph(f'REQ-FR-{i}: {feature}', style='List Number') 
-        else:
-            doc.add_paragraph("No functional requirements captured.")
-
-        # 3. Save the Document
-        filename = f"SRS_Project_{datetime.now().strftime('%Y%m%d%H%M')}.docx"
-        doc.save(filename)
-        
-        # 4. Notify the user
-        dispatcher.utter_message(text=f"✅ Professional SRS document generated and saved as {filename}.")
-        
+        # This is handled by the backend export endpoint
         return []
 
-# --- V10: FILE HAS FINISHED LOADING ---
-print("[ACTIONS.PY] --- Finished loading actions.py (V10) ---")
+print("[ACTIONS.PY] ✓ Successfully loaded actions.py (V11)")

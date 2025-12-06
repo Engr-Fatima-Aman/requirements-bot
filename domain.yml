@@ -6,6 +6,7 @@ intents:
   - goodbye
   - inform
   - confirm
+  - request_srs_export
 
 actions:
   - action_intelligent_analysis

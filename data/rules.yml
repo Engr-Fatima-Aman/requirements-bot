@@ -1,11 +1,36 @@
-# data/rules.yml
 version: "3.1"
+
 rules:
-- rule: Handle confirmation
-  steps:
-  - intent: confirm
-  - action: utter_ask_more
-- rule: Final Document Generation
-  steps:
-    - intent: request_srs_export
-    - action: action_generate_srs_doc
+  - rule: Initialize on greeting and set project state
+    steps:
+      - intent: greet
+      - action: utter_greet
+      - action: action_set_project_id # Sets project_id and phase to 'vision'
+      - action: action_listen
+
+  - rule: Route general conversation to the Intelligent Analysis Action
+    # This is the core logic. All user input is directed to the AI for phased elicitation.
+    steps:
+      - intent: inform
+      - action: action_intelligent_analysis
+      - action: action_listen
+    # We use 'action_listen' here to ensure the core policy knows we are waiting for the next input.
+
+  - rule: Route confirmation to intelligent analysis
+    # If the user confirms something (e.g., "Yes, that's correct"), the AI handles the follow-up.
+    steps:
+      - intent: confirm
+      - action: action_intelligent_analysis
+      - action: action_listen
+
+  - rule: Handle SRS Export Request
+    # Triggers the Python action to generate the Word document.
+    steps:
+      - intent: request_srs_export
+      - action: action_generate_srs_doc
+      - action: action_listen
+
+  - rule: Handle goodbye
+    steps:
+      - intent: goodbye
+      - action: utter_goodbye
