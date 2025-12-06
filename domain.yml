@@ -10,6 +10,7 @@ intents:
 actions:
   - action_intelligent_analysis
   - action_set_project_id
+  - action_generate_srs_doc
 
 slots:
   project_id:

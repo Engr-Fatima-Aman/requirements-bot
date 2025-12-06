@@ -5,3 +5,7 @@ rules:
   steps:
   - intent: confirm
   - action: utter_ask_more
+- rule: Final Document Generation
+  steps:
+    - intent: request_srs_export
+    - action: action_generate_srs_doc

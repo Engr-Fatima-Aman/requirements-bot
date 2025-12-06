@@ -16,7 +16,7 @@ app = Flask(__name__)
 CORS(app)
 
 RASA_SERVER_URL = "http://localhost:5005"
-DB_PATH = "requirements.db"
+DB_PATH = "../requirements.db"
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)

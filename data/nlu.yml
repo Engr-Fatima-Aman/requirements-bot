@@ -43,3 +43,9 @@ nlu:
     - i need a page for users to sign in
     - what about security?
     - the system must be fast
+- intent: request_srs_export
+  examples: |
+    - generate the document
+    - I want the SRS now
+    - export my requirements
+    - finalize the project
