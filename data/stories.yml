@@ -1,0 +1,24 @@
+version: "3.1"
+
+stories:
+- story: Greeting
+  steps:
+    - intent: greet
+    - action: utter_greet
+    # We set the project_id at the start
+    - action: action_set_project_id
+
+- story: Main conversation loop
+  steps:
+    # This story activates ANY time the user says something
+    # that is classified as 'inform'
+    - intent: inform
+    # It runs our ONE smart action.
+    - action: action_intelligent_analysis
+    # The action itself handles the response
+    # The story then loops, waiting for the next 'inform'
+
+- story: Goodbye
+  steps:
+    - intent: goodbye
+    - action: utter_goodbye

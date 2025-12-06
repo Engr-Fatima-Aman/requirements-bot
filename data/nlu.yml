@@ -1,0 +1,45 @@
+version: "3.1"
+nlu:
+- intent: greet
+  examples: |
+    - hey
+    - hello
+    - hi
+    - good morning
+
+- intent: goodbye
+  examples: |
+    - bye
+    - goodbye
+    - see you
+
+# === NEW INTENT ===
+- intent: confirm
+  examples: |
+    - yes
+    - yeah
+    - correct
+    - that's right
+    - exactly
+    - sure
+    - ok
+    - yup
+    
+# This is the new, combined intent.
+# It catches EVERYTHING that isn't a greeting.
+- intent: inform
+  examples: |
+    - we need a mobile app
+    - we want to build a CRM
+    - we need user authentication
+    - we want a dashboard
+    - limited budget
+    - we need it in 3 months
+    - sales team will use it
+    - company is in healthcare
+    - this is essential
+    - we use Python
+    - integrate with Salesforce
+    - i need a page for users to sign in
+    - what about security?
+    - the system must be fast

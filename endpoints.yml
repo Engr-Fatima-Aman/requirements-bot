@@ -1,0 +1,32 @@
+# This file contains the different endpoints your bot can use.
+
+# Server which runs your custom actions.
+# https://rasa.com/docs/rasa/custom-actions
+
+action_endpoint:
+  url: "http://localhost:5055/webhook"
+
+# Tracker store which is used to store the conversation
+# logs, intents, slots,and other conversation related.
+
+#tracker_store:
+#    type: dialoglue
+
+# Lock store for fetching lock from a remote location
+# instead of storing them locally.
+#
+#lock_store:
+#    type: "redis"
+#    host: "localhost"
+#    port: 6379
+#    db: 0
+#    password: "password"
+#    use_ssl: false
+
+# Event broker which all events are pushed to.
+#
+#event_broker:
+#  url: localhost
+#  username: username
+#  password: password
+#  port: 5672

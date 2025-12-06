@@ -1,0 +1,45 @@
+# domain.yml
+version: "3.1"
+
+intents:
+  - greet
+  - goodbye
+  - inform
+  - confirm
+
+actions:
+  - action_intelligent_analysis
+  - action_set_project_id
+
+slots:
+  project_id:
+    type: float
+    mappings:
+    - type: custom
+  
+  # === NEW SLOT ===
+  elicitation_phase:
+    type: categorical
+    values:
+      - vision
+      - functional
+      - non_functional
+      - constraints
+      - done
+    initial_value: vision # Start in the 'vision' phase
+    mappings:
+    - type: custom
+
+responses:
+  utter_greet:
+    - text: "Hello! 👋 I'm your AI Requirements Assistant. To begin, please tell me about the project you have in mind."
+  utter_goodbye:
+    - text: "Thank you for the session! All requirements have been logged. Goodbye!"
+  utter_ask_more:
+    - text: "Got it. What else can you tell me?"
+    - text: "Understood. What other requirements do you have?"
+    - text: "Okay. Please continue."
+
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true
