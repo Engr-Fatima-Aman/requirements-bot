@@ -179,3 +179,22 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# --- RASA & PYTHON (Backend Protection) ---
+venv/
+venv310/
+.venv/
+__pycache__/
+*.pyc
+models/
+.rasa/
+results/
+*.db
+*.db-journal
+credentials.yml
+
+# --- FRONTEND (React Protection) ---
+frontend/node_modules/
+frontend/build/
+frontend/.pnp
+.DS_Store
